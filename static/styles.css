@@ -1,0 +1,98 @@
+:root {
+    --bg-color: #1a1b26; --card-bg: #24283b; --text-color: #c0caf5;
+    --header-color: #bb9af7; --accent-color: #7aa2f7; --green: #9ece6a;
+    --red: #f7768e; --orange: #ff9e64; --yellow: #e0af68; --border-radius: 8px;
+}
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px;
+}
+.container { max-width: 1200px; margin: 0 auto; }
+header {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--accent-color); padding-bottom: 10px; margin-bottom: 20px;
+}
+h1, h2 { color: var(--header-color); }
+h1 { font-size: 1.8em; margin: 0; }
+h2 { border-bottom: 1px solid #414868; padding-bottom: 8px; margin-top: 0; display: flex; align-items: center; font-size: 1.2em; }
+.icon { margin-right: 10px; }
+.card {
+    background-color: var(--card-bg); border-radius: var(--border-radius);
+    padding: 20px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+.status-connected { color: var(--green); } .status-disconnected { color: var(--red); }
+
+/* Live Status Grid */
+.live-status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
+.live-gpu-card h3 { margin: 0 0 10px; font-size: 1em; color: var(--text-color); display: flex; align-items: center; }
+.live-stat-value { font-size: 1.8em; font-weight: bold; text-align: center; color: var(--yellow); margin-bottom: 10px; }
+.progress-bar-container { background-color: #16161e; border-radius: 5px; height: 10px; }
+.progress-bar { background: var(--yellow); height: 100%; border-radius: 5px; transition: width 0.5s ease; }
+
+/* Layout Grid for Task Manager & List */
+.layout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px; }
+
+/* Task Form */
+.form-group { margin-bottom: 15px; }
+label { display: block; margin-bottom: 5px; font-weight: bold; }
+input[type="number"], input[type="email"] {
+    width: 100%; padding: 10px; background-color: #16161e;
+    border: 1px solid #414868; border-radius: 5px; color: var(--text-color); box-sizing: border-box;
+}
+.gpu-checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.checkbox-label { background-color: #16161e; padding: 8px 12px; border-radius: 5px; cursor: pointer; border: 1px solid #414868; }
+.checkbox-label input { margin-right: 5px; }
+.checkbox-label:has(input:checked) { background-color: var(--accent-color); color: var(--bg-color); border-color: var(--accent-color); }
+button[type="submit"] {
+    width: 100%; background-color: var(--green); color: var(--bg-color); border: none;
+    padding: 12px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: background-color 0.3s;
+}
+button[type="submit"]:hover { background-color: #86b85c; }
+.feedback { margin-top: 15px; padding: 10px; border-radius: 5px; display: none; }
+.feedback:not(:empty) { display: block; }
+.feedback.success { background-color: rgba(158, 206, 106, 0.2); color: var(--green); }
+.feedback.error { background-color: rgba(247, 118, 142, 0.2); color: var(--red); }
+
+/* Task List */
+#task-list-container { max-height: 400px; overflow-y: auto; }
+.no-tasks { text-align: center; opacity: 0.7; padding: 20px; }
+.task-card {
+    background: #1e2132; border-radius: 5px; padding: 15px;
+    margin-bottom: 10px; border-left: 4px solid var(--accent-color);
+}
+.task-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.task-email { font-weight: bold; color: var(--header-color); }
+.delete-task-btn {
+    background: transparent; border: none; color: var(--red); font-size: 1.5em;
+    cursor: pointer; line-height: 1; padding: 0 5px;
+}
+.task-card-body { font-size: 0.9em; }
+
+/* Chart */
+.chart-container { position: relative; height: 300px; }
+
+
+/* --- 新增样式 --- */
+
+/* 用于包裹别称和邮箱输入框的行 */
+.form-row {
+    display: flex;
+    gap: 15px; /* 两个输入框之间的间距 */
+}
+
+/* 让行内的表单组平分空间 */
+.form-row .form-group {
+    flex: 1;
+}
+
+/* 任务卡片中显示别称的样式 */
+.task-alias {
+    font-weight: bold;
+    color: var(--header-color);
+    cursor: help; /* 鼠标悬停时显示帮助手势，提示可以看邮箱 */
+}
+
+input[type="text"], input[type="alias"] {
+    width: 100%; padding: 10px; background-color: #16161e;
+    border: 1px solid #414868; border-radius: 5px; color: var(--text-color); box-sizing: border-box;
+}
