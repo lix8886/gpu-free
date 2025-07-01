@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPUFree</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>GPU监控与订阅面板【218】</h1>
+            <div id="connection-status" class="status-disconnected">● 未连接</div>
+        </header>
+
+        <main>
+            <section id="live-status-container" class="live-status-grid">
+                {% if not gpus %}
+                <div class="card error-card">
+                    <h2><span class="icon">❌</span> 错误</h2>
+                    <p>未检测到 NVIDIA GPU 或无法初始化 NVML 库。</p>
+                </div>
+                {% else %}
+                {% for gpu in gpus %}
+                <div class="card live-gpu-card" id="gpu-{{ gpu.id }}">
+                    <h3><span class="icon">💻</span> {{ gpu.name }}</h3>
+                    <div class="live-stat-value">--%</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% endif %}
+            </section>
+
+            <section class="card">
+                <h2><span class="icon">📊</span> 占用率历史 (过去10min)</h2>
+                <div class="chart-container">
+                    <canvas id="history-chart"></canvas>
+                </div>
+            </section>
+
+            <div class="layout-grid">
+                <section class="card" id="task-manager">
+                    <h2><span class="icon">📫</span> 添加GPU空闲订阅</h2>
+                    <p>当所选GPU占用率全部低于阈值时，您将收到邮件通知。</p>
+                    <form id="task-form">
+                        <div class="form-group">
+                            <label>选择要监控的GPU (可多选):</label>
+                            <div class="gpu-checkbox-group">
+                                {% for gpu in gpus %}
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="gpu_ids" value="{{ gpu.id }}"> {{ gpu.name }}
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="util-threshold">占用率低于此值则通知 (%):</label>
+                            <input type="number" id="util-threshold" min="1" max="100" value="60" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="alias">用户名:</label>
+                                <input type="text" id="alias" placeholder="例如, huihe" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="email">通知邮箱地址:</label>
+                                <input type="email" id="email" placeholder="user@example.com" required>
+                            </div>
+                        </div>
+                        <button type="submit">创建订阅任务</button>
+                    </form>
+                    <div id="task-feedback" class="feedback"></div>
+                </section>
+
+                <section class="card">
+                    <h2><span class="icon">📋</span> 当前订阅任务</h2>
+                    <div id="task-list-container">
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const statusDiv = document.getElementById('connection-status');
+            const taskForm = document.getElementById('task-form');
+            const taskFeedback = document.getElementById('task-feedback');
+            const taskListContainer = document.getElementById('task-list-container');
+            const historyChartCanvas = document.getElementById('history-chart').getContext('2d');
+            let historyChart;
+
+            const GPU_COLORS = ['#7aa2f7', '#f7768e', '#e0af68', '#9ece6a', '#bb9af7', '#ff9e64', '#7dcfff', '#c0caf5'];
+
+            // --- 1. 初始化历史图表 ---
+            function initHistoryChart() {
+                historyChart = new Chart(historyChartCanvas, {
+                    type: 'line',
+                    data: { datasets: [] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: {
+                            x: { type: 'time', time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } }, ticks: { color: '#c0caf5' } },
+                            y: { min: 0, max: 100, ticks: { color: '#c0caf5', callback: (value) => value + '%' } }
+                        },
+                        plugins: {
+                            legend: { labels: { color: '#c0caf5' } },
+                            // ***自定义悬停时的工具提示信息***
+                            tooltip: {
+                                callbacks: {
+                                    label: function (context) {
+                                        const label = context.dataset.label || '';
+                                        const value = context.parsed.y;
+                                        return `${label}: ${value}%`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                updateHistoryChart();
+                setInterval(updateHistoryChart, 5000);
+            }
+
+            // --- 2. 更新历史图表数据 ---
+            async function updateHistoryChart() {
+                try {
+                    const response = await fetch('/history');
+                    const historyData = await response.json();
+
+                    const datasets = [];
+                    for (const gpuId in historyData) {
+                        const gpuData = historyData[gpuId];
+                        // 从实时卡片获取完整的GPU名称
+                        const gpuCard = document.getElementById(`gpu-${gpuId}`);
+                        const gpuName = gpuCard ? gpuCard.querySelector('h3').textContent.trim() : `GPU ${gpuId}`;
+
+                        datasets.push({
+                            label: gpuName, // 将完整GPU名作为label
+                            data: gpuData.map(d => ({ x: new Date(`1970-01-01T${d.time}Z`), y: d.util })),
+                            borderColor: GPU_COLORS[gpuId % GPU_COLORS.length],
+                            tension: 0.2,
+                            pointRadius: 0,
+                            pointHoverRadius: 5 // 悬停时显示点
+                        });
+                    }
+                    historyChart.data.datasets = datasets;
+                    historyChart.update('none');
+                } catch (error) {
+                    console.error("更新历史图表失败:", error);
+                }
+            }
+
+            // --- 3. 更新任务列表 ---
+            async function updateTaskList() {
+                try {
+                    const response = await fetch('/tasks');
+                    const tasks = await response.json();
+                    taskListContainer.innerHTML = '';
+                    if (tasks.length === 0) {
+                        taskListContainer.innerHTML = '<p class="no-tasks">暂无订阅任务</p>';
+                        return;
+                    }
+                    tasks.forEach(task => {
+                        const taskCard = document.createElement('div');
+                        taskCard.className = 'task-card';
+                        // ***显示别称 (alias), 并将邮箱地址放在title属性中悬停显示***
+                        taskCard.innerHTML = `
+                        <div class="task-card-header">
+                            <span class="task-alias" title="邮箱: ${task.email}">${task.alias}</span>
+                            <button class="delete-task-btn" data-task-id="${task.id}">×</button>
+                        </div>
+                        <div class="task-card-body">
+                            当 <strong>${task.gpu_names.join(', ')}</strong> 的占用率均低于 <strong>${task.util_threshold}%</strong> 时通知。
+                        </div>
+                    `;
+                        taskListContainer.appendChild(taskCard);
+                    });
+                } catch (error) {
+                    console.error("获取任务列表失败:", error);
+                }
+            }
+
+            // --- 4. WebSocket 连接 ---
+            function connectWebSocket() {
+                const ws = new WebSocket(`ws://${window.location.host}/ws`);
+                ws.onopen = () => { statusDiv.textContent = '● 已连接'; statusDiv.className = 'status-connected'; };
+                ws.onmessage = (event) => {
+                    const liveStats = JSON.parse(event.data);
+                    liveStats.forEach(gpu => {
+                        const card = document.getElementById(`gpu-${gpu.id}`);
+                        if (card) {
+                            card.querySelector('.live-stat-value').textContent = `${gpu.gpu_utilization}%`;
+                            card.querySelector('.progress-bar').style.width = `${gpu.gpu_utilization}%`;
+                        }
+                    });
+                };
+                ws.onclose = () => {
+                    statusDiv.textContent = '● 已断开'; statusDiv.className = 'status-disconnected';
+                    setTimeout(connectWebSocket, 3000);
+                };
+            }
+
+            // --- 5. 事件监听 ---
+            taskForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const selectedGpuIds = Array.from(document.querySelectorAll('input[name="gpu_ids"]:checked')).map(cb => parseInt(cb.value));
+                if (selectedGpuIds.length === 0) {
+                    alert("请至少选择一个GPU！"); return;
+                }
+
+                const formData = {
+                    gpu_ids: selectedGpuIds,
+                    util_threshold: parseInt(document.getElementById('util-threshold').value),
+                    email: document.getElementById('email').value,
+                    alias: document.getElementById('alias').value,
+                };
+
+                const response = await fetch('/task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    taskFeedback.textContent = '订阅任务创建成功!';
+                    taskFeedback.className = 'feedback success';
+                    taskForm.reset();
+                    updateTaskList();
+                } else {
+                    taskFeedback.textContent = '创建失败，请检查输入。';
+                    taskFeedback.className = 'feedback error';
+                }
+                setTimeout(() => taskFeedback.textContent = '', 5000);
+            });
+
+            taskListContainer.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('delete-task-btn')) {
+                    const taskId = e.target.dataset.taskId;
+                    if (confirm('确定要删除这个订阅任务吗?')) {
+                        const response = await fetch(`/task/${taskId}`, { method: 'DELETE' });
+                        if (response.ok) {
+                            updateTaskList();
+                        } else {
+                            alert('删除失败!');
+                        }
+                    }
+                }
+            });
+
+            // --- 初始化 ---
+            if ({{ gpus | length }} > 0) {
+                connectWebSocket();
+                initHistoryChart();
+                updateTaskList();
+                // ***每2秒自动刷新一次任务列表***
+                setInterval(updateTaskList, 2000);
+            }
+        });
+    </script>
+</body>
+
+</html>
