@@ -18,7 +18,12 @@
    python -m venv venv
    source venv/bin/activate  # Windows: venv\Scripts\activate
    ```
-3. **安装依赖**
+   or
+   ```bash
+   conda create -n gpu-free
+   conda activate gpu-free
+   ```
+4. **安装依赖**
 
    ```bash
    pip install -r requirements.txt
